@@ -1,9 +1,9 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Location from "expo-location";
 import { router } from "expo-router";
-import { addDoc, collection } from "firebase/firestore";
-import { useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { addDoc, collection, getDocs, query, Timestamp, where } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { Platform, ScrollView, StyleSheet, View } from "react-native";
 import { Button, Card, Text, TextInput } from "react-native-paper";
 import { db } from "../../src/config/firebase";
 
@@ -12,36 +12,27 @@ export default function CrearObra() {
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [radio, setRadio] = useState("");
+  const [supervisores, setSupervisores] = useState<any[]>([]);
+  const [supervisorSeleccionado, setSupervisorSeleccionado] = useState("");
 
   const [fechaFin, setFechaFin] = useState<Date | null>(null);
   const [mostrarPicker, setMostrarPicker] = useState(false);
 
-  // 📍 Obtener ubicación automática
   const obtenerUbicacion = async () => {
     const permiso = await Location.requestForegroundPermissionsAsync();
-
     if (permiso.status !== "granted") {
       alert("Permiso de ubicación denegado");
       return;
     }
-
     const location = await Location.getCurrentPositionAsync({});
-
     setLat(location.coords.latitude.toString());
     setLng(location.coords.longitude.toString());
   };
 
   const guardarObra = async () => {
-    if (!nombre || !lat || !lng || !radio || !fechaFin) {
-      alert("Completa todos los campos");
-      return;
-    }
-
-    const fechaInicio = new Date();
-
-    // 🚨 VALIDACIÓN
-    if (fechaFin < fechaInicio) {
-      alert("La fecha no puede ser anterior a hoy");
+    // ✅ Validación de supervisor seleccionada
+    if (!nombre || !lat || !lng || !radio || !fechaFin || !supervisorSeleccionado) {
+      alert("Completa todos los campos y selecciona un supervisor");
       return;
     }
 
@@ -52,21 +43,35 @@ export default function CrearObra() {
         lng: parseFloat(lng),
         radio: parseFloat(radio),
         estatus: "Iniciando",
-        fechaInicio: fechaInicio.getTime(),
-        fechaFin: fechaFin.getTime(),
+        supervisorId: supervisorSeleccionado,
+        fechaInicio: Timestamp.now(), 
+        fechaFin: Timestamp.fromDate(fechaFin), 
       });
 
       alert("Obra creada correctamente");
       router.back();
-
     } catch (error) {
-      console.log(error);
+      console.error(error);
       alert("Error al crear obra");
     }
   };
 
+  useEffect(() => {
+    const cargarSupervisores = async () => {
+      try {
+        const q = query(collection(db, "usuarios"), where("rol", "==", "supervisor"));
+        const snapshot = await getDocs(q);
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setSupervisores(data);
+      } catch (error) {
+        console.log("Error cargando supervisores:", error);
+      }
+    };
+    cargarSupervisores();
+  }, []);
+
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
       <Card style={styles.card}>
         <Text style={styles.title}>Crear nueva obra</Text>
 
@@ -78,24 +83,14 @@ export default function CrearObra() {
           style={styles.input}
         />
 
-        {/* 📍 BOTÓN UBICACIÓN */}
-        <Button mode="outlined" onPress={obtenerUbicacion} style={styles.input}>
+        <Button mode="outlined" onPress={obtenerUbicacion} style={styles.input} icon="map-marker">
           Obtener ubicación actual
         </Button>
 
-        <TextInput
-          label="Latitud"
-          value={lat}
-          editable={false}
-          style={styles.input}
-        />
-
-        <TextInput
-          label="Longitud"
-          value={lng}
-          editable={false}
-          style={styles.input}
-        />
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <TextInput label="Lat" value={lat} editable={false} style={[styles.input, { flex: 0.45 }]} />
+            <TextInput label="Lng" value={lng} editable={false} style={[styles.input, { flex: 0.45 }]} />
+        </View>
 
         <TextInput
           label="Radio (metros)"
@@ -106,23 +101,29 @@ export default function CrearObra() {
           style={styles.input}
         />
 
-        {/* 📅 FECHA */}
-        <Button
-          mode="outlined"
-          onPress={() => setMostrarPicker(true)}
-          style={styles.input}
-        >
-          {fechaFin
-            ? `Fin: ${fechaFin.toLocaleDateString()}`
-            : "Seleccionar fecha de finalización"}
+        <Button mode="outlined" onPress={() => setMostrarPicker(true)} style={styles.input} icon="calendar">
+          {fechaFin ? `Fin: ${fechaFin.toLocaleDateString()}` : "Fecha de finalización"}
         </Button>
+
+        <Text style={styles.label}>Seleccionar supervisor</Text>
+        {supervisores.map((sup) => (
+          <Button
+            key={sup.id}
+            mode={supervisorSeleccionado === sup.id ? "contained" : "outlined"}
+            onPress={() => setSupervisorSeleccionado(sup.id)}
+            style={styles.supervisorBtn}
+            contentStyle={{ justifyContent: 'flex-start' }}
+          >
+            {sup.nombre || sup.email}
+          </Button>
+        ))}
 
         {mostrarPicker && (
           <DateTimePicker
             value={fechaFin || new Date()}
             mode="date"
-            display="default"
-            minimumDate={new Date()} // 🚨 no fechas pasadas
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            minimumDate={new Date()}
             onChange={(event, date) => {
               setMostrarPicker(Platform.OS === "ios");
               if (date) setFechaFin(date);
@@ -134,24 +135,21 @@ export default function CrearObra() {
           Guardar obra
         </Button>
       </Card>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    paddingVertical: 40,
+    paddingHorizontal: 20,
     backgroundColor: "#F4F6F8",
-    justifyContent: "center",
-    padding: 20,
   },
-
   card: {
     padding: 20,
     borderRadius: 20,
     elevation: 4,
   },
-
   title: {
     fontSize: 22,
     textAlign: "center",
@@ -159,13 +157,19 @@ const styles = StyleSheet.create({
     color: "#0A84FF",
     fontWeight: "bold",
   },
-
   input: {
     marginBottom: 15,
   },
-
+  label: {
+    marginBottom: 8,
+    fontWeight: 'bold',
+    color: '#666'
+  },
+  supervisorBtn: {
+    marginBottom: 8,
+  },
   button: {
-    marginTop: 10,
+    marginTop: 20,
     backgroundColor: "#34C759",
     borderRadius: 10,
     paddingVertical: 5,
