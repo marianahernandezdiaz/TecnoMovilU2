@@ -2,7 +2,6 @@ import { Stack } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
 import { auth, db } from "../src/config/firebase";
 
 // ✅ Tipo
@@ -16,9 +15,11 @@ export default function RootLayout() {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
+useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+
+    if (firebaseUser) {
+      try {
         const docRef = doc(db, "usuarios", firebaseUser.uid);
         const docSnap = await getDoc(docRef);
 
@@ -29,38 +30,39 @@ export default function RootLayout() {
             rol: docSnap.data().rol,
           });
         } else {
-          setUser(null);
+          // 🔥 fallback
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            rol: "operador"
+          });
         }
-      } else {
-        setUser(null);
+
+      } catch (error) {
+        console.log("Error obteniendo usuario:", error);
+
+        setUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          rol: "operador"
+        });
       }
 
-      setLoading(false);
-    });
+    } else {
+      // 🔥 usuario no logueado
+      setUser(null);
+    }
 
-    return unsubscribe;
-  }, []);
+    // 🔥 SIEMPRE se ejecuta
+    setLoading(false);
+  });
 
-  // 🔥 Pantalla de carga
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
+  return unsubscribe;
+}, []);
 
-  return (
-    <Stack screenOptions={{ headerShown: false }}>
-      {!user ? (
-        <Stack.Screen name="(auth)/login" />
-      ) : user.rol === "administrador" ? (
-        <Stack.Screen name="admin/dashboard" />
-      ) : user.rol === "supervisor" ? (
-        <Stack.Screen name="supervisor/home" />
-      ) : (
-        <Stack.Screen name="(tabs)" />
-      )}
-    </Stack>
-  );
+return (
+  <Stack screenOptions={{ headerShown: false }}>
+    <Stack.Screen name="(tabs)" />
+  </Stack>
+);
 }

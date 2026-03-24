@@ -20,7 +20,7 @@ export default function Login() {
   const login = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.replace("/(tabs)/reportar"); 
+      router.replace("../(tabs)/index");
     } catch (error: any) {
       mostrarMensaje(getErrorMessage(error));
     }
