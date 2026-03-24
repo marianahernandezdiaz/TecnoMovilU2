@@ -40,7 +40,6 @@ export default function Register() {
         nombre,
         email: user.email,
         rol,
-        obras: obrasArray,
         fechaRegistro: Date.now()
       });
 
@@ -85,13 +84,6 @@ export default function Register() {
           style={styles.input}
         />
 
-        <TextInput
-          label="Obras asignadas (separadas por coma)"
-          mode="outlined"
-          value={obras}
-          onChangeText={setObras}
-          style={styles.input}
-        />
 
         {/* 🔥 SELECTOR DE ROL */}
         <View style={{ marginBottom: 15 }}>

@@ -3,7 +3,7 @@ import * as Location from "expo-location";
 import { router } from "expo-router";
 import { addDoc, collection, getDocs, query, Timestamp, where } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { Platform, ScrollView, StyleSheet, View } from "react-native";
+import { Platform, ScrollView, StyleSheet } from "react-native";
 import { Button, Card, Text, TextInput } from "react-native-paper";
 import { db } from "../../src/config/firebase";
 
@@ -14,6 +14,9 @@ export default function CrearObra() {
   const [radio, setRadio] = useState("");
   const [supervisores, setSupervisores] = useState<any[]>([]);
   const [supervisorSeleccionado, setSupervisorSeleccionado] = useState("");
+
+  const [operadores, setOperadores] = useState<any[]>([]);
+  const [operadoresSeleccionados, setOperadoresSeleccionados] = useState<string[]>([]);
 
   const [fechaFin, setFechaFin] = useState<Date | null>(null);
   const [mostrarPicker, setMostrarPicker] = useState(false);
@@ -30,7 +33,6 @@ export default function CrearObra() {
   };
 
   const guardarObra = async () => {
-    // ✅ Validación de supervisor seleccionada
     if (!nombre || !lat || !lng || !radio || !fechaFin || !supervisorSeleccionado) {
       alert("Completa todos los campos y selecciona un supervisor");
       return;
@@ -42,12 +44,12 @@ export default function CrearObra() {
         lat: parseFloat(lat),
         lng: parseFloat(lng),
         radio: parseFloat(radio),
-        estatus: "Iniciando",
+        estatus: "En proceso",
         supervisorId: supervisorSeleccionado,
-        fechaInicio: Timestamp.now(), 
-        fechaFin: Timestamp.fromDate(fechaFin), 
+        operadores: operadoresSeleccionados, // 🔥 NUEVO
+        fechaInicio: Timestamp.now(),
+        fechaFin: Timestamp.fromDate(fechaFin),
       });
-
       alert("Obra creada correctamente");
       router.back();
     } catch (error) {
@@ -67,8 +69,29 @@ export default function CrearObra() {
         console.log("Error cargando supervisores:", error);
       }
     };
+
+    const cargarOperadores = async () => {
+      try {
+        const q = query(collection(db, "usuarios"), where("rol", "==", "operador"));
+        const snapshot = await getDocs(q);
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setOperadores(data);
+      } catch (error) {
+        console.log("Error cargando operadores:", error);
+      }
+    };
+
     cargarSupervisores();
+    cargarOperadores();
   }, []);
+
+  const toggleOperador = (id: string) => {
+    if (operadoresSeleccionados.includes(id)) {
+      setOperadoresSeleccionados(operadoresSeleccionados.filter(op => op !== id));
+    } else {
+      setOperadoresSeleccionados([...operadoresSeleccionados, id]);
+    }
+  };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -87,10 +110,21 @@ export default function CrearObra() {
           Obtener ubicación actual
         </Button>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <TextInput label="Lat" value={lat} editable={false} style={[styles.input, { flex: 0.45 }]} />
-            <TextInput label="Lng" value={lng} editable={false} style={[styles.input, { flex: 0.45 }]} />
-        </View>
+        <TextInput
+          label="Latitud"
+          mode="outlined"
+          value={lat}
+          onChangeText={setLat}
+          style={styles.input}
+        />
+
+        <TextInput
+          label="Longitud"
+          mode="outlined"
+          value={lng}
+          onChangeText={setLng}
+          style={styles.input}
+        />
 
         <TextInput
           label="Radio (metros)"
@@ -112,9 +146,22 @@ export default function CrearObra() {
             mode={supervisorSeleccionado === sup.id ? "contained" : "outlined"}
             onPress={() => setSupervisorSeleccionado(sup.id)}
             style={styles.supervisorBtn}
-            contentStyle={{ justifyContent: 'flex-start' }}
+            contentStyle={{ justifyContent: "flex-start" }}
           >
             {sup.nombre || sup.email}
+          </Button>
+        ))}
+
+        <Text style={styles.label}>Seleccionar operadores</Text>
+        {operadores.map((op) => (
+          <Button
+            key={op.id}
+            mode={operadoresSeleccionados.includes(op.id) ? "contained" : "outlined"}
+            onPress={() => toggleOperador(op.id)}
+            style={styles.supervisorBtn}
+            contentStyle={{ justifyContent: "flex-start" }}
+          >
+            {op.nombre || op.email}
           </Button>
         ))}
 
@@ -122,7 +169,7 @@ export default function CrearObra() {
           <DateTimePicker
             value={fechaFin || new Date()}
             mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            display={Platform.OS === "ios" ? "spinner" : "default"}
             minimumDate={new Date()}
             onChange={(event, date) => {
               setMostrarPicker(Platform.OS === "ios");
@@ -149,6 +196,7 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRadius: 20,
     elevation: 4,
+    backgroundColor: "#fff",
   },
   title: {
     fontSize: 22,
@@ -162,11 +210,12 @@ const styles = StyleSheet.create({
   },
   label: {
     marginBottom: 8,
-    fontWeight: 'bold',
-    color: '#666'
+    fontWeight: "bold",
+    color: "#666",
   },
   supervisorBtn: {
     marginBottom: 8,
+    borderRadius: 10,
   },
   button: {
     marginTop: 20,
