@@ -1,13 +1,17 @@
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
+import { useLocalSearchParams } from "expo-router";
 import { addDoc, collection } from "firebase/firestore";
 import { useState } from "react";
-import { Image, View } from "react-native";
-import { Button, Text } from "react-native-paper";
+import { Image, ScrollView, StyleSheet } from "react-native";
+import { Button, Card, Text, TextInput } from "react-native-paper";
 import { auth, db } from "../../src/config/firebase";
 
 export default function Reportar() {
   const [image, setImage] = useState<any>(null);
+  const [descripcion, setDescripcion] = useState("");
+
+  const { obraId } = useLocalSearchParams();
 
   const tomarFoto = async () => {
     const permiso = await ImagePicker.requestCameraPermissionsAsync();
@@ -28,117 +32,139 @@ export default function Reportar() {
     }
   };
 
-const subirImagen = async () => {
-  console.log("1. Iniciando subida");
+  const subirImagen = async () => {
+    console.log("1. Iniciando subida");
 
-  if (!image) {
-    alert("Toma una foto primero");
-    return;
-  }
-
-  try {
-    console.log("2. Obteniendo ubicación");
-
-    const ubicacion = await obtenerUbicacion();
-
-    console.log("3. Ubicación:", ubicacion);
-
-    if (!ubicacion) return;
-
-    const distancia = calcularDistancia(
-    ubicacion.lat,
-    ubicacion.lng,
-    obra.lat,
-    obra.lng
-    );
-
-    console.log("Distancia:", distancia);
-
-    // 🚨 VALIDACIÓN
-    if (distancia > obra.radio) {
-    alert("No estás dentro de la zona de la obra");
-    return;
-    }
-
-    console.log("4. Subiendo a Cloudinary");
-
-    const data = new FormData();
-
-    data.append("file", {
-      uri: image.uri,
-      type: "image/jpg",
-      name: "foto.jpg",
-    } as any);
-
-    data.append("upload_preset", "ReportesApp");
-
-    const res = await fetch(
-      "https://api.cloudinary.com/v1_1/dfucjpdqr/image/upload",
-      {
-        method: "POST",
-        body: data,
-      }
-    );
-
-    const file = await res.json();
-
-    console.log("5. Respuesta Cloudinary:", file);
-
-    if (!file.secure_url) {
-      alert("Error al subir imagen");
+    if (!image) {
+      alert("Toma una foto primero");
       return;
     }
 
-    console.log("6. Guardando en Firestore");
+    if (!descripcion) {
+      alert("Agrega una descripción");
+      return;
+    }
 
-    await addDoc(collection(db, "evidencias"), {
-      usuarioId: auth.currentUser?.uid,
-      imagen: file.secure_url,
-      lat: ubicacion.lat,
-      lng: ubicacion.lng,
-      fecha: Date.now(),
-      estado: "pendiente"
-    });
+    try {
+      console.log("2. Obteniendo ubicación");
 
-    console.log("7. TODO OK");
+      const ubicacion = await obtenerUbicacion();
+      if (!ubicacion) return;
 
-    alert("Evidencia subida correctamente");
+      const distancia = calcularDistancia(
+        ubicacion.lat,
+        ubicacion.lng,
+        obra.lat,
+        obra.lng
+      );
 
-    setImage(null);
+      if (distancia > obra.radio) {
+        alert("No estás dentro de la zona de la obra");
+        return;
+      }
 
-  } catch (error) {
-    console.log("ERROR GENERAL:", error);
-    alert("Error al subir imagen");
-  }
-};
+      console.log("3. Subiendo a Cloudinary");
 
+      const data = new FormData();
 
-  return (
-    <View style={{ padding: 20 }}>
-      <Text variant="titleMedium">Captura de evidencia</Text>
+      data.append("file", {
+        uri: image.uri,
+        type: "image/jpg",
+        name: "foto.jpg",
+      } as any);
 
-      <Button mode="contained" onPress={tomarFoto}>
-        Tomar foto
+      data.append("upload_preset", "ReportesApp");
+
+      const res = await fetch(
+        "https://api.cloudinary.com/v1_1/dfucjpdqr/image/upload",
+        {
+          method: "POST",
+          body: data,
+        }
+      );
+
+      const file = await res.json();
+
+      if (!file.secure_url) {
+        alert("Error al subir imagen");
+        return;
+      }
+
+      console.log("4. Guardando en Firestore");
+
+      await addDoc(collection(db, "evidencias"), {
+        obraId: obraId,
+        usuarioId: auth.currentUser?.uid,
+        tipo: "imagen",
+        imagen: file.secure_url,
+        descripcion: descripcion,
+        lat: ubicacion.lat,
+        lng: ubicacion.lng,
+        fecha: Date.now(),
+        estado: "pendiente",
+        supervisorId: null,
+      });
+
+      alert("Evidencia subida correctamente");
+
+      setImage(null);
+      setDescripcion("");
+
+    } catch (error) {
+      console.log("ERROR GENERAL:", error);
+      alert("Error al subir imagen");
+    }
+  };
+
+ return (
+  <ScrollView contentContainerStyle={styles.container}>
+    
+    <Text style={styles.title}>Captura de evidencia</Text>
+
+    {/* 📸 BOTÓN FOTO */}
+    <Button
+      mode="contained"
+      onPress={tomarFoto}
+      style={styles.btnFoto}
+    >
+      📸 Tomar foto
+    </Button>
+
+    {/* 📝 DESCRIPCIÓN */}
+    <Card style={styles.card}>
+      <Card.Content>
+        <TextInput
+          label="Descripción"
+          mode="outlined"
+          value={descripcion}
+          onChangeText={setDescripcion}
+        />
+      </Card.Content>
+    </Card>
+
+    {/* 🖼 PREVIEW */}
+    {image && (
+      <Card style={styles.card}>
+        <Image
+          source={{ uri: image.uri }}
+          style={styles.image}
+        />
+      </Card>
+    )}
+
+    {/* 🚀 SUBIR */}
+    {image && (
+      <Button
+        mode="contained"
+        onPress={subirImagen}
+        style={styles.btnSubir}
+      >
+        Subir evidencia
       </Button>
+    )}
 
-      {image && (
-        <>
-          <Image
-            source={{ uri: image.uri }}
-            style={{ height: 300, marginTop: 20 }}
-          />
-
-          <Button
-            mode="contained"
-            onPress={subirImagen}
-            style={{ marginTop: 10 }}
-          >
-            Subir evidencia
-          </Button>
-        </>
-      )}
-    </View>
-  );
+  </ScrollView>
+);
 }
 const obtenerUbicacion = async () => {
   try {
@@ -199,3 +225,41 @@ const calcularDistancia = (
 
   return R * c; // distancia en metros
 };
+
+const styles = StyleSheet.create({
+  container: {
+    padding: 20,
+    backgroundColor: "#F4F6F8",
+  },
+
+  title: {
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#0A84FF",
+    marginBottom: 15,
+  },
+
+  btnFoto: {
+    backgroundColor: "#0A84FF", // 🔵 azul
+    borderRadius: 12,
+    marginBottom: 15,
+  },
+
+  card: {
+    borderRadius: 15,
+    marginBottom: 15,
+    padding: 5,
+  },
+
+  image: {
+    width: "100%",
+    height: 250,
+    borderRadius: 15,
+  },
+
+  btnSubir: {
+    backgroundColor: "#34C759", // 🟢 verde
+    borderRadius: 12,
+    paddingVertical: 5,
+  },
+});

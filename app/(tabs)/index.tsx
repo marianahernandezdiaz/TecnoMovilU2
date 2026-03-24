@@ -60,7 +60,9 @@ useEffect(() => {
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
           renderItem={({ item }) => (
-            <Card style={styles.card}>
+            <Card style={styles.card}
+            onPress={() => router.push(`/obra/${item.id}`)}
+            >
               <Card.Content>
                 <Text style={styles.nombre}>
                   {item.nombre}
@@ -70,16 +72,9 @@ useEffect(() => {
                   {item.estatus}
                 </Text>
               </Card.Content>
+              
 
-              {/* 🔥 BOTÓN REPORTAR */}
-              <Button
-                mode="text"
-                onPress={() =>
-                  router.push(`/reportar?obraId=${item.id}`)
-                }
-              >
-                Reportar evidencia
-              </Button>
+  
             </Card>
           )}
         />
