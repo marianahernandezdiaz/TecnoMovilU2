@@ -20,7 +20,7 @@ export default function Login() {
   const login = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      mostrarMensaje("Inicio de sesión exitoso");
+      router.replace("/(tabs)/reportar"); 
     } catch (error: any) {
       mostrarMensaje(getErrorMessage(error));
     }
