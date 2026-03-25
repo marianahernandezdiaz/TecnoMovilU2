@@ -8,6 +8,7 @@ import { Image, ScrollView, StyleSheet, TouchableOpacity, View } from "react-nat
 import { Button, Card, Text, TextInput } from "react-native-paper";
 import { auth, db } from "../../src/config/firebase";
 
+
 export default function Reportar() {
   const [image, setImage] = useState<any>(null);
   const [descripcion, setDescripcion] = useState("");

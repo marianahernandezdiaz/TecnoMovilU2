@@ -1,9 +1,17 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Location from "expo-location";
 import { router } from "expo-router";
-import { addDoc, collection, getDocs, query, Timestamp, where } from "firebase/firestore";
-import { useEffect, useState } from "react";
-import { Platform, ScrollView, StyleSheet } from "react-native";
+import {
+  addDoc,
+  collection,
+  getDocs,
+  query,
+  Timestamp,
+  where,
+} from "firebase/firestore";
+import { useEffect, useRef, useState } from "react";
+import { ScrollView, StyleSheet } from "react-native";
+import MapView, { Marker, UrlTile } from "react-native-maps";
 import { Button, Card, Text, TextInput } from "react-native-paper";
 import { db } from "../../src/config/firebase";
 
@@ -12,29 +20,50 @@ export default function CrearObra() {
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
   const [radio, setRadio] = useState("");
+
   const [supervisores, setSupervisores] = useState<any[]>([]);
   const [supervisorSeleccionado, setSupervisorSeleccionado] = useState("");
 
   const [operadores, setOperadores] = useState<any[]>([]);
-  const [operadoresSeleccionados, setOperadoresSeleccionados] = useState<string[]>([]);
+  const [operadoresSeleccionados, setOperadoresSeleccionados] = useState<
+    string[]
+  >([]);
 
   const [fechaFin, setFechaFin] = useState<Date | null>(null);
   const [mostrarPicker, setMostrarPicker] = useState(false);
 
+  const mapRef = useRef<any>(null);
+
+  // 📍 Obtener ubicación
   const obtenerUbicacion = async () => {
     const permiso = await Location.requestForegroundPermissionsAsync();
+
     if (permiso.status !== "granted") {
       alert("Permiso de ubicación denegado");
       return;
     }
+
     const location = await Location.getCurrentPositionAsync({});
-    setLat(location.coords.latitude.toString());
-    setLng(location.coords.longitude.toString());
+
+    const nuevaLat = location.coords.latitude.toString();
+    const nuevaLng = location.coords.longitude.toString();
+
+    setLat(nuevaLat);
+    setLng(nuevaLng);
+
+    // 🔥 centrar mapa
+    mapRef.current?.animateToRegion({
+      latitude: parseFloat(nuevaLat),
+      longitude: parseFloat(nuevaLng),
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    });
   };
 
+  // 💾 Guardar obra
   const guardarObra = async () => {
     if (!nombre || !lat || !lng || !radio || !fechaFin || !supervisorSeleccionado) {
-      alert("Completa todos los campos y selecciona un supervisor");
+      alert("Completa todos los campos");
       return;
     }
 
@@ -46,10 +75,11 @@ export default function CrearObra() {
         radio: parseFloat(radio),
         estatus: "En proceso",
         supervisorId: supervisorSeleccionado,
-        operadores: operadoresSeleccionados, // 🔥 NUEVO
+        operadores: operadoresSeleccionados,
         fechaInicio: Timestamp.now(),
         fechaFin: Timestamp.fromDate(fechaFin),
       });
+
       alert("Obra creada correctamente");
       router.back();
     } catch (error) {
@@ -58,38 +88,31 @@ export default function CrearObra() {
     }
   };
 
+  // 🔄 Cargar usuarios
   useEffect(() => {
-    const cargarSupervisores = async () => {
+    const cargarDatos = async () => {
       try {
-        const q = query(collection(db, "usuarios"), where("rol", "==", "supervisor"));
-        const snapshot = await getDocs(q);
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setSupervisores(data);
+        const supQ = query(collection(db, "usuarios"), where("rol", "==", "supervisor"));
+        const opQ = query(collection(db, "usuarios"), where("rol", "==", "operador"));
+
+        const supSnap = await getDocs(supQ);
+        const opSnap = await getDocs(opQ);
+
+        setSupervisores(supSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setOperadores(opSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       } catch (error) {
-        console.log("Error cargando supervisores:", error);
+        console.log(error);
       }
     };
 
-    const cargarOperadores = async () => {
-      try {
-        const q = query(collection(db, "usuarios"), where("rol", "==", "operador"));
-        const snapshot = await getDocs(q);
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setOperadores(data);
-      } catch (error) {
-        console.log("Error cargando operadores:", error);
-      }
-    };
-
-    cargarSupervisores();
-    cargarOperadores();
+    cargarDatos();
   }, []);
 
   const toggleOperador = (id: string) => {
     if (operadoresSeleccionados.includes(id)) {
-      setOperadoresSeleccionados(operadoresSeleccionados.filter(op => op !== id));
+      setOperadoresSeleccionados(prev => prev.filter(op => op !== id));
     } else {
-      setOperadoresSeleccionados([...operadoresSeleccionados, id]);
+      setOperadoresSeleccionados(prev => [...prev, id]);
     }
   };
 
@@ -99,84 +122,101 @@ export default function CrearObra() {
         <Text style={styles.title}>Crear nueva obra</Text>
 
         <TextInput
-          label="Nombre de la obra"
+          label="Nombre"
           mode="outlined"
           value={nombre}
           onChangeText={setNombre}
           style={styles.input}
         />
 
-        <Button mode="outlined" onPress={obtenerUbicacion} style={styles.input} icon="map-marker">
-          Obtener ubicación actual
+        <Button
+          mode="outlined"
+          onPress={obtenerUbicacion}
+          icon="map-marker"
+          style={styles.input}
+        >
+          Obtener ubicación
         </Button>
 
-        <TextInput
-          label="Latitud"
-          mode="outlined"
-          value={lat}
-          onChangeText={setLat}
-          style={styles.input}
-        />
+        {/* 🗺️ MAPA OSM */}
+        <MapView
+          ref={mapRef}
+          style={styles.map}
+          initialRegion={{
+            latitude: lat ? parseFloat(lat) : 19.289,
+            longitude: lng ? parseFloat(lng) : -99.738,
+            latitudeDelta: 0.05,
+            longitudeDelta: 0.05,
+          }}
+          onPress={(e) => {
+            const { latitude, longitude } = e.nativeEvent.coordinate;
+            setLat(latitude.toString());
+            setLng(longitude.toString());
+          }}
+        >
+          <UrlTile
+            urlTemplate="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            maximumZ={19}
+          />
+
+          {lat && lng && (
+            <Marker
+              coordinate={{
+                latitude: parseFloat(lat),
+                longitude: parseFloat(lng),
+              }}
+            />
+          )}
+        </MapView>
+
+        <TextInput label="Latitud" value={lat} onChangeText={setLat} style={styles.input} />
+        <TextInput label="Longitud" value={lng} onChangeText={setLng} style={styles.input} />
 
         <TextInput
-          label="Longitud"
-          mode="outlined"
-          value={lng}
-          onChangeText={setLng}
-          style={styles.input}
-        />
-
-        <TextInput
-          label="Radio (metros)"
-          mode="outlined"
+          label="Radio (m)"
           value={radio}
           onChangeText={setRadio}
           keyboardType="numeric"
           style={styles.input}
         />
 
-        <Button mode="outlined" onPress={() => setMostrarPicker(true)} style={styles.input} icon="calendar">
-          {fechaFin ? `Fin: ${fechaFin.toLocaleDateString()}` : "Fecha de finalización"}
+        <Button onPress={() => setMostrarPicker(true)} icon="calendar">
+          {fechaFin ? fechaFin.toLocaleDateString() : "Fecha final"}
         </Button>
-
-        <Text style={styles.label}>Seleccionar supervisor</Text>
-        {supervisores.map((sup) => (
-          <Button
-            key={sup.id}
-            mode={supervisorSeleccionado === sup.id ? "contained" : "outlined"}
-            onPress={() => setSupervisorSeleccionado(sup.id)}
-            style={styles.supervisorBtn}
-            contentStyle={{ justifyContent: "flex-start" }}
-          >
-            {sup.nombre || sup.email}
-          </Button>
-        ))}
-
-        <Text style={styles.label}>Seleccionar operadores</Text>
-        {operadores.map((op) => (
-          <Button
-            key={op.id}
-            mode={operadoresSeleccionados.includes(op.id) ? "contained" : "outlined"}
-            onPress={() => toggleOperador(op.id)}
-            style={styles.supervisorBtn}
-            contentStyle={{ justifyContent: "flex-start" }}
-          >
-            {op.nombre || op.email}
-          </Button>
-        ))}
 
         {mostrarPicker && (
           <DateTimePicker
             value={fechaFin || new Date()}
             mode="date"
-            display={Platform.OS === "ios" ? "spinner" : "default"}
             minimumDate={new Date()}
-            onChange={(event, date) => {
-              setMostrarPicker(Platform.OS === "ios");
-              if (date) setFechaFin(date);
+            onChange={(e, d) => {
+              setMostrarPicker(false);
+              if (d) setFechaFin(d);
             }}
           />
         )}
+
+        <Text style={styles.label}>Supervisor</Text>
+        {supervisores.map((s) => (
+          <Button
+            key={s.id}
+            mode={supervisorSeleccionado === s.id ? "contained" : "outlined"}
+            onPress={() => setSupervisorSeleccionado(s.id)}
+          >
+            {s.nombre || s.email}
+          </Button>
+        ))}
+
+        <Text style={styles.label}>Operadores</Text>
+        {operadores.map((op) => (
+          <Button
+            key={op.id}
+            mode={operadoresSeleccionados.includes(op.id) ? "contained" : "outlined"}
+            onPress={() => toggleOperador(op.id)}
+          >
+            {op.nombre || op.email}
+          </Button>
+        ))}
 
         <Button mode="contained" onPress={guardarObra} style={styles.button}>
           Guardar obra
@@ -188,39 +228,34 @@ export default function CrearObra() {
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: 40,
-    paddingHorizontal: 20,
+    padding: 20,
     backgroundColor: "#F4F6F8",
   },
   card: {
     padding: 20,
     borderRadius: 20,
-    elevation: 4,
-    backgroundColor: "#fff",
   },
   title: {
     fontSize: 22,
     textAlign: "center",
-    marginBottom: 20,
+    marginBottom: 15,
     color: "#0A84FF",
     fontWeight: "bold",
   },
   input: {
-    marginBottom: 15,
+    marginBottom: 10,
+  },
+  map: {
+    height: 220,
+    borderRadius: 15,
+    marginBottom: 10,
   },
   label: {
-    marginBottom: 8,
+    marginTop: 10,
     fontWeight: "bold",
-    color: "#666",
-  },
-  supervisorBtn: {
-    marginBottom: 8,
-    borderRadius: 10,
   },
   button: {
     marginTop: 20,
     backgroundColor: "#34C759",
-    borderRadius: 10,
-    paddingVertical: 5,
   },
 });

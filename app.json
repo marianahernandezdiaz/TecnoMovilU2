@@ -21,23 +21,22 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.ReportesApp",
-
       "config": {
         "googleMaps": {
-          "apiKey": "AIzaSyAlCFdOdcL9DJ1U8-EtvkFVXRUbi6QoFZU"
+          "apiKey": "AIzaSyAFRz0TiCAk-tMN4Te28SZ5INKcWgAAW-8"
         }
       }
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/LogoReportes.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/LogoReportes.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -55,6 +54,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "02c16233-c39d-43b1-a1d7-983921060a26"
+      }
     }
   }
 }

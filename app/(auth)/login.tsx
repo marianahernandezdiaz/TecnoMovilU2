@@ -4,6 +4,7 @@ import { useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { Button, Card, Snackbar, Text, TextInput } from "react-native-paper";
 import { auth } from "../../src/config/firebase";
+import useOrientation from "../../src/hooks/useOrientation";
 
 
 export default function Login() {
@@ -11,6 +12,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
   const [mensaje, setMensaje] = useState("");
+  const orientation = useOrientation();
 
   const mostrarMensaje = (msg: string) => {
     setMensaje(msg);
@@ -20,7 +22,7 @@ export default function Login() {
   const login = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      router.replace("../(tabs)/index");
+      router.replace("/(tabs)");
     } catch (error: any) {
       mostrarMensaje(getErrorMessage(error));
     }
